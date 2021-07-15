@@ -1,6 +1,9 @@
 import numpy as np;
 from PIL import Image;
 import argparse
+from gifgenerator import *
+import os
+import glob
 
 def argParser():
 	parser = argparse.ArgumentParser()
@@ -31,6 +34,9 @@ class Maze:
 
 		self.start = start
 		self.end = end
+
+		self.frequency = int(self.image.size[0]*self.image.size[1]/50)
+		self.frameCount = 0
 
 	def closestColor(self,color):
 		val = 0.299*color[0] + 0.587*color[1] + 0.114*color[2]
@@ -97,7 +103,8 @@ class Maze:
 		image = self.image.copy()
 		q.append(self.start)
 		pixels = image.load()
-		pixels[self.start] = self.BLACK
+		pixels[self.start] = self.GREEN
+		iterations = 0
 
 		while q:
 			vertex = q.pop(0)
@@ -117,15 +124,22 @@ class Maze:
 			neighbours = self.getNeighbours(vertex)
 			for neighbour in neighbours:
 				if self.isValid(neighbour) and pixels[neighbour] == self.WHITE:
-					pixels[neighbour] = self.BLACK
+					pixels[neighbour] = self.GREEN
 					parent[neighbour[0]][neighbour[1]] = vertex
 					q.append(neighbour)
 
+			if iterations%self.frequency == 0:
+				image.save('./frames/'+str(self.frameCount)+'.jpg')
+				self.frameCount = self.frameCount + 1
+			
+			iterations = iterations+1
 		return []
 
 	def solve(self):
 		self.cleanImage()
 		self.fixWalls()
+
+		print(self.frequency)
 
 		path = self.bfs()
 		if path:
@@ -134,8 +148,11 @@ class Maze:
 				for neighbour in self.getNeighbours(pos):
 					if self.isValid(neighbour) and self.pixels[neighbour] == self.WHITE:
 						self.pixels[neighbour] = self.GREEN
-
+			
 			self.showImage()
+			self.image.save('./output/output.jpg')
+			createGIF(self.imagePath, self.frameCount)
+
 		else:
 			print("Path not found")
 
@@ -144,7 +161,9 @@ def main(arg):
 	start = (arg.startx,arg.starty)
 	end = (arg.endx,arg.endy)
 	maze = Maze(url,start,end)
-
+	files = glob.glob('./frames/*')
+	for f in files:
+		os.remove(f)
 	maze.solve()
 
 if __name__ == '__main__':
