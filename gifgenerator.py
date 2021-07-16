@@ -1,8 +1,8 @@
 from PIL import Image
 
-def createGIF(path,frameCount):
+def createGIF(path,frameCount,algorithm,heuristic):
     inp = Image.open(path)
-    out  = Image.open('./output/output.jpg')
+    out  = Image.open('./output/'+heuristic+'-'+algorithm+'-'+'out.jpg')
     frames = []
 
     for i in range(frameCount):
@@ -17,4 +17,4 @@ def createGIF(path,frameCount):
         frames.append(out)
         x += duration
 
-    inp.save('./output/out.gif',save_all=True, append_images=frames, optimize=False, duration=duration, loop=0)
+    inp.save('./output/'+heuristic+'-'+algorithm+'-'+'out.gif',save_all=True, append_images=frames, optimize=False, duration=duration, loop=0)

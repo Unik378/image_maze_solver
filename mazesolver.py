@@ -4,13 +4,16 @@ import argparse
 from gifgenerator import *
 import os
 import glob
+from queue import PriorityQueue
+from collections import defaultdict
 
 def argParser():
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument('--image', nargs='?', default='maze.png', help="Path to maze image")
 
-	# parser.add_argument('--output', nargs='?', default='', help="File to save Embeedings of combined input graph")
+	parser.add_argument('--algorithm', nargs='?', default='astar', help="Algorithm to solve maze")
+	parser.add_argument('--heruistic', nargs='?', default='manhattan', help="Heruistic for astar algo")
 
 	parser.add_argument('--startx', type=int, default=0,help='Start x of maze')
 	parser.add_argument('--starty', type=int, default=0,help='Start y of maze')
@@ -21,7 +24,7 @@ def argParser():
 
 class Maze:
 
-	def __init__(self, imagePath, start=(0,0), end=(0,0)):
+	def __init__(self,imagePath, algorithm, heuristic ,start=(0,0), end=(0,0)):
 		self.imagePath = imagePath
 		self.image = Image.open(imagePath)
 		self.image = self.image.convert('RGB')
@@ -34,8 +37,11 @@ class Maze:
 
 		self.start = start
 		self.end = end
+		self.algorithm = algorithm
+		self.heuristic = heuristic
 
 		self.frequency = int(self.image.size[0]*self.image.size[1]/50)
+		self.frequency = 1000
 		self.frameCount = 0
 
 	def closestColor(self,color):
@@ -111,6 +117,8 @@ class Maze:
 
 			if vertex == self.end:
 				print("found")
+				image.save('./frames/'+str(self.frameCount)+'.jpg')
+				self.frameCount = self.frameCount + 1
 				i = self.end[0]
 				j = self.end[1]
 				path = []
@@ -135,13 +143,93 @@ class Maze:
 			iterations = iterations+1
 		return []
 
+	def h(self, point):
+		if self.algorithm == 'djikstra':
+			return 0
+		
+		dx = abs(point[0] - self.end[0])
+		dy = abs(point[1] - self.end[1])
+		D = 2
+		D2 = 1
+		if self.heuristic == 'euclidean':
+			return D * np.sqrt(dx * dx + dy * dy)
+		elif self.heuristic == 'diagonal':
+			return D * (dx + dy) + (D2 - 2 * D) * min(dx, dy)
+		else:
+			return D*(dx+dy) #Manhattan
+
+	def popMin_fscore(self,discovered,fscore):
+		min = next(iter(discovered))
+		for x in discovered:
+			if fscore[min] > fscore[x]:
+				min = x
+		discovered.remove(min)
+		return min
+				
+	def Astar(self):
+		discovered = set()
+		image = self.image.copy()
+		pixels = image.load()
+
+		g_score = defaultdict(lambda: float("inf"))
+		g_score[self.start] = 0
+
+		f_score = defaultdict(lambda: float("inf"))
+		f_score[self.start] = self.h(self.start)
+
+		discovered.add(self.start)
+		pixels[self.start] = self.GREEN
+
+		came_from = dict()
+		iterations = 0
+
+		while len(discovered) != 0:
+			
+			current = self.popMin_fscore(discovered, f_score)
+			pixels[current] = self.RED
+
+			if current == self.end:
+				path = []
+				image.save('./frames/'+str(self.frameCount)+'.jpg')
+				self.frameCount = self.frameCount + 1
+				while current != self.start:
+					path.append(current)
+					current = came_from[current]
+				path.append(current)
+				return path
+
+			for neighbour in self.getNeighbours(current):
+				if self.isValid(neighbour) and pixels[neighbour] != self.BLACK and pixels[neighbour] != self.RED:
+		
+					tenative_gscore = g_score[current]+1
+					if tenative_gscore < g_score[neighbour]:
+						came_from[neighbour] = current
+						g_score[neighbour] = tenative_gscore
+						f_score[neighbour] = g_score[neighbour] + self.h(neighbour)
+
+						if pixels[neighbour] == self.WHITE:
+							pixels[neighbour] = self.GREEN
+							discovered.add(neighbour)
+			
+			if iterations%self.frequency == 0:
+				image.save('./frames/'+str(self.frameCount)+'.jpg')
+				self.frameCount = self.frameCount + 1
+
+			iterations += 1
+
+		return []
+
 	def solve(self):
 		self.cleanImage()
 		self.fixWalls()
 
 		print(self.frequency)
 
-		path = self.bfs()
+		if self.algorithm == 'bfs':
+			path = self.bfs()
+		else:
+			path = self.Astar()
+		
 		if path:
 			for pos in path:
 				self.pixels[pos] = self.GREEN
@@ -150,9 +238,8 @@ class Maze:
 						self.pixels[neighbour] = self.GREEN
 			
 			self.showImage()
-			self.image.save('./output/output.jpg')
-			createGIF(self.imagePath, self.frameCount)
-
+			self.image.save('./output/'+self.heuristic+'-'+self.algorithm+'-'+'out.jpg')
+			createGIF(self.imagePath, self.frameCount, self.algorithm, self.heuristic)
 		else:
 			print("Path not found")
 
@@ -160,7 +247,7 @@ def main(arg):
 	url = arg.image
 	start = (arg.startx,arg.starty)
 	end = (arg.endx,arg.endy)
-	maze = Maze(url,start,end)
+	maze = Maze(url,arg.algorithm,arg.heruistic,start,end)
 	files = glob.glob('./frames/*')
 	for f in files:
 		os.remove(f)
